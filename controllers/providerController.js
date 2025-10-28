@@ -1,0 +1,264 @@
+const Provider = require('../models/Provider');
+
+// POST /api/providers - Create a new provider
+const createProvider = async (req, res) => {
+  try {
+    const providerData = req.body;
+    
+    // Validate required fields - only name is required
+    if (!providerData.name || providerData.name.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Provider name is required'
+      });
+    }
+
+    // Check if provider with same name already exists
+    const existingProvider = await Provider.findOne({
+      name: providerData.name
+    });
+
+    if (existingProvider) {
+      return res.status(409).json({
+        success: false,
+        message: 'Provider with this name already exists'
+      });
+    }
+
+    // Clean up empty strings for optional fields
+    if (providerData.description === '') {
+      delete providerData.description;
+    }
+    
+    // Clean up contact info if all fields are empty
+    if (providerData.contactInfo) {
+      const { phone, email, website, address } = providerData.contactInfo;
+      const hasContactInfo = phone || email || website || 
+        (address && (address.street || address.city || address.state || address.country || address.zipCode));
+      
+      if (!hasContactInfo) {
+        delete providerData.contactInfo;
+      } else {
+        // Clean up empty address fields
+        if (address) {
+          const hasAddress = address.street || address.city || address.state || address.country || address.zipCode;
+          if (!hasAddress) {
+            delete providerData.contactInfo.address;
+          }
+        }
+      }
+    }
+
+    // Add the authenticated user's ID as the creator
+    providerData.createdBy = req.user.id;
+
+    const provider = new Provider(providerData);
+    await provider.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Provider created successfully',
+      data: { provider }
+    });
+
+  } catch (error) {
+    console.error('Create provider error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      
+      // Create a more specific error message based on the first error
+      let specificMessage = 'Validation error';
+      if (errors.length > 0) {
+        const firstError = errors[0];
+        if (firstError.includes('email')) {
+          specificMessage = 'Please enter a valid email address. Make sure to include the domain extension (e.g., .com, .org)';
+        } else if (firstError.includes('phone')) {
+          specificMessage = 'Please enter a valid phone number';
+        } else if (firstError.includes('name')) {
+          specificMessage = 'Please enter a valid provider name';
+        } else if (firstError.includes('type')) {
+          specificMessage = 'Please select a valid provider type';
+        } else if (firstError.includes('required')) {
+          specificMessage = 'Please fill in all required fields';
+        } else {
+          specificMessage = firstError;
+        }
+      }
+      
+      return res.status(400).json({
+        success: false,
+        message: specificMessage,
+        errors
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while creating provider'
+    });
+  }
+};
+
+// GET /api/providers - Get all providers with filtering and pagination
+const getAllProviders = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', type = '' } = req.query;
+    
+    const query = {};
+    
+    // Add search filter
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { 'contactInfo.email': { $regex: search, $options: 'i' } },
+        { 'contactInfo.phone': { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    // Note: type filter removed as Provider model doesn't have a type field
+
+    const providers = await Provider.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Provider.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: {
+        providers,
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('Get all providers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while fetching providers'
+    });
+  }
+};
+
+// GET /api/providers/:id - Get provider by ID
+const getProvider = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const provider = await Provider.findById(id);
+    
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { provider }
+    });
+
+  } catch (error) {
+    console.error('Get provider error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while fetching provider'
+    });
+  }
+};
+
+// PUT /api/providers/:id - Update provider
+const updateProvider = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const provider = await Provider.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Provider updated successfully',
+      data: { provider }
+    });
+
+  } catch (error) {
+    console.error('Update provider error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while updating provider'
+    });
+  }
+};
+
+// DELETE /api/providers/:id - Delete provider
+const deleteProvider = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if provider has services
+    const Service = require('../models/Service');
+    const servicesCount = await Service.countDocuments({ providerId: id });
+    
+    if (servicesCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete provider with existing services. Delete services first.'
+      });
+    }
+
+    const provider = await Provider.findByIdAndDelete(id);
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Provider deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete provider error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while deleting provider'
+    });
+  }
+};
+
+
+module.exports = {
+  createProvider,
+  getAllProviders,
+  getProvider,
+  updateProvider,
+  deleteProvider
+};
