@@ -1785,9 +1785,14 @@ const addServiceFromTemplateToSale = async (req, res) => {
     const { id } = req.params;
     const serviceData = req.body;
     
-    // Validate required fields
-    const requiredFields = ['serviceTemplateId', 'checkIn', 'checkOut', 'cost', 'providerId'];
+    // Validate required fields - providerId is optional if providers array is provided
+    const requiredFields = ['serviceTemplateId', 'checkIn', 'checkOut', 'cost'];
     const missingFields = requiredFields.filter(field => !serviceData[field]);
+    
+    // Check if either providerId or providers array is provided
+    if (!serviceData.providerId && (!serviceData.providers || serviceData.providers.length === 0)) {
+      missingFields.push('providerId or providers');
+    }
     
     if (missingFields.length > 0) {
       return res.status(400).json({
@@ -1813,12 +1818,49 @@ const addServiceFromTemplateToSale = async (req, res) => {
       });
     }
 
-    // Validate provider
-    const provider = await Provider.findById(serviceData.providerId);
-    if (!provider) {
-      return res.status(404).json({
-        success: false,
-        message: `Provider with ID ${serviceData.providerId} not found`
+    // Handle multiple providers if provided, otherwise use single providerId
+    let providersArray = [];
+    let primaryProviderId = null;
+    
+    if (serviceData.providers && serviceData.providers.length > 0) {
+      // Validate all providers in the array
+      for (const providerData of serviceData.providers) {
+        const providerId = providerData.providerId || providerData;
+        const provider = await Provider.findById(providerId);
+        if (!provider) {
+          return res.status(404).json({
+            success: false,
+            message: `Provider with ID ${providerId} not found`
+          });
+        }
+        
+        providersArray.push({
+          providerId: provider._id,
+          costProvider: providerData.costProvider || parseFloat(serviceData.cost) / serviceData.providers.length,
+          currency: providerData.currency || serviceData.currency || 'USD',
+          commissionRate: providerData.commissionRate || 0,
+          serviceProviderId: providerData.serviceProviderId || null,
+          startDate: providerData.startDate ? new Date(providerData.startDate) : null,
+          endDate: providerData.endDate ? new Date(providerData.endDate) : null,
+          documents: providerData.documents || []
+        });
+      }
+      primaryProviderId = providersArray[0].providerId;
+    } else {
+      // Validate single provider
+      const provider = await Provider.findById(serviceData.providerId);
+      if (!provider) {
+        return res.status(404).json({
+          success: false,
+          message: `Provider with ID ${serviceData.providerId} not found`
+        });
+      }
+      primaryProviderId = provider._id;
+      providersArray.push({
+        providerId: provider._id,
+        costProvider: parseFloat(serviceData.cost),
+        currency: serviceData.currency || 'USD',
+        commissionRate: 0
       });
     }
 
@@ -1827,14 +1869,15 @@ const addServiceFromTemplateToSale = async (req, res) => {
       serviceTemplateId: serviceTemplate._id,
       serviceName: serviceData.serviceName || serviceTemplate.name, // Use template name as fallback
       priceClient: parseFloat(serviceData.cost),
-      costProvider: parseFloat(serviceData.cost) * 0.8, // Assuming 20% markup
+      costProvider: parseFloat(serviceData.costProvider || serviceData.cost),
       currency: serviceData.currency || 'USD',
       quantity: 1,
       serviceDates: {
         startDate: new Date(serviceData.checkIn),
         endDate: new Date(serviceData.checkOut)
       },
-      providerId: provider._id,
+      providerId: primaryProviderId, // Keep for backward compatibility
+      providers: providersArray, // Include multiple providers
       notes: serviceData.notes || `Service from template: ${serviceTemplate.name}`
     };
 
@@ -1846,12 +1889,16 @@ const addServiceFromTemplateToSale = async (req, res) => {
       { path: 'clientId', select: 'name surname email' },
       { path: 'createdBy', select: 'username email' },
       { path: 'services.serviceTemplateId', select: 'name category' },
-      { path: 'services.providerId', select: 'name type' }
+      { path: 'services.providerId', select: 'name type' },
+      { path: 'services.providers.providerId', select: 'name type email phone' }
     ]);
 
+    // Get the saved service with populated data
+    const savedService = sale.services[sale.services.length - 1];
+    
     // Create a response object with populated data for the new service
     const populatedService = {
-      _id: newService._id || sale.services[sale.services.length - 1]._id,
+      _id: savedService._id,
       serviceTemplateId: {
         _id: serviceTemplate._id,
         name: serviceTemplate.name,
@@ -1863,10 +1910,17 @@ const addServiceFromTemplateToSale = async (req, res) => {
       currency: newService.currency,
       quantity: newService.quantity,
       serviceDates: newService.serviceDates,
-      providerId: {
-        _id: provider._id,
-        name: provider.name
+      providerId: savedService.providerId || {
+        _id: primaryProviderId,
+        name: savedService.providerId?.name || 'Unknown Provider'
       },
+      providers: savedService.providers || providersArray.map(p => ({
+        providerId: p.providerId,
+        costProvider: p.costProvider,
+        currency: p.currency,
+        commissionRate: p.commissionRate,
+        documents: p.documents || []
+      })),
       notes: newService.notes,
       // Include destination data from the request
       destination: {
