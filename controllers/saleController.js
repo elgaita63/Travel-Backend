@@ -636,6 +636,21 @@ const updateSale = async (req, res) => {
 
     if (updateData.services) {
       for (const serviceSale of updateData.services) {
+        // Handle serviceTemplateId if present (for services created from templates)
+        if (serviceSale.serviceTemplateId) {
+          const serviceTemplateId = typeof serviceSale.serviceTemplateId === 'object' && serviceSale.serviceTemplateId !== null
+            ? serviceSale.serviceTemplateId._id || serviceSale.serviceTemplateId
+            : serviceSale.serviceTemplateId;
+          
+          const ServiceTemplate = require('../models/ServiceTemplate');
+          const serviceTemplate = await ServiceTemplate.findById(serviceTemplateId);
+          if (!serviceTemplate) {
+            console.log('⚠️ Service template not found, but continuing with update (edit mode)');
+          }
+          // Normalize the serviceTemplateId to be just the ID string
+          serviceSale.serviceTemplateId = serviceTemplateId;
+        }
+        
         // Extract the service ID - it might be an object with _id or just a string
         const serviceId = typeof serviceSale.serviceId === 'object' && serviceSale.serviceId !== null
           ? serviceSale.serviceId._id || serviceSale.serviceId
