@@ -250,8 +250,16 @@ const getSale = async (req, res) => {
             select: 'name category description'
           }
         },
-        { path: 'services.providerId', select: 'name type contactInfo' },
-        { path: 'services.providers.providerId', select: 'name type contactInfo' },
+        { 
+          path: 'services.serviceTemplateId', 
+          select: 'name category description serviceType',
+          populate: {
+            path: 'serviceType',
+            select: 'name'
+          }
+        },
+        { path: 'services.providerId', select: 'name type contactInfo email phone' },
+        { path: 'services.providers.providerId', select: 'name type contactInfo email phone' },
         { path: 'createdBy', select: 'username email role' },
         { path: 'paymentsClient.paymentId' },
         { path: 'paymentsProvider.paymentId' }
