@@ -6,7 +6,7 @@ const Provider = require('../models/Provider');
 const User = require('../models/User');
 const ActivityLog = require('../models/ActivityLog');
 const Payment = require('../models/Payment');
-const mongoose = require('mongoose');
+const mongoose = require('mongoose');  
 
 // GET /api/admin-insights/overview - Get comprehensive admin overview
 const getAdminOverview = async (req, res) => {
