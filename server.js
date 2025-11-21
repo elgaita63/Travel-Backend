@@ -65,7 +65,7 @@ app.use((req, res, next) => {
 const allowedOrigins = [
   'https://travel-management-system1.netlify.app',
   'https://travel-management-system1.netlify.app/', // With trailing slash
-  'https://travel-backend-production-5253.up.railway.app', // Railway backend
+  'https://travel-backend-production-96d5.up.railway.app', // Railway backend
   'http://localhost:3000', // For local development
   'http://localhost:5173',  // For Vite dev server
   'http://localhost:5000',  // For local backend testing
