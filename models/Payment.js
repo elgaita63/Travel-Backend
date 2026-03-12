@@ -21,8 +21,7 @@ const paymentSchema = new mongoose.Schema({
   },
   amount: {
     type: Number,
-    required: [true, 'Payment amount is required'],
-    min: [0, 'Payment amount cannot be negative']
+    required: [true, 'Payment amount is required']
   },
   currency: {
     type: String,
@@ -67,8 +66,7 @@ const paymentSchema = new mongoose.Schema({
     maxlength: [3, 'Base currency code cannot exceed 3 characters']
   },
   originalAmount: {
-    type: Number,
-    min: [0, 'Original amount cannot be negative']
+    type: Number
   },
   originalCurrency: {
     type: String,

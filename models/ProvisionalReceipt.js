@@ -76,8 +76,7 @@ const provisionalReceiptSchema = new mongoose.Schema({
   paymentDetails: {
     amount: {
       type: Number,
-      required: [true, 'Payment amount is required'],
-      min: [0, 'Payment amount cannot be negative']
+      required: [true, 'Payment amount is required']
     },
     currency: {
       type: String,

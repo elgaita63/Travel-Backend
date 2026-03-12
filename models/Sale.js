@@ -149,8 +149,7 @@ const serviceSaleSchema = new mongoose.Schema({
   },
   originalAmount: {
     type: Number,
-    required: false,
-    min: [0, 'Original amount cannot be negative']
+    required: false
   },
   exchangeRate: {
     type: Number,
@@ -267,13 +266,11 @@ const saleSchema = new mongoose.Schema({
   }],
   totalClientPayments: {
     type: Number,
-    default: 0,
-    min: [0, 'Total client payments cannot be negative']
+    default: 0
   },
   totalProviderPayments: {
     type: Number,
-    default: 0,
-    min: [0, 'Total provider payments cannot be negative']
+    default: 0
   },
   clientBalance: {
     type: Number,

@@ -114,7 +114,7 @@ const recordClientPayment = async (req, res) => {
 
     // Update sale with new payment
     sale.paymentsClient.push({ paymentId: payment.id });
-    sale.totalClientPayments += convertedAmount;
+    sale.totalClientPayments = Number(sale.totalClientPayments) + Number(convertedAmount);
     
     // Recalculate balances
     sale.clientBalance = sale.totalSalePrice - sale.totalClientPayments;
@@ -242,7 +242,7 @@ const recordProviderPayment = async (req, res) => {
 
     // Update sale with new payment
     sale.paymentsProvider.push({ paymentId: payment.id });
-    sale.totalProviderPayments += convertedAmount;
+    sale.totalProviderPayments = Number(sale.totalProviderPayments) + Number(convertedAmount);
     
     // Recalculate balances
     sale.clientBalance = sale.totalSalePrice - sale.totalClientPayments;

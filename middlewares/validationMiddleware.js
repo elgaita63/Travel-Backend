@@ -395,9 +395,9 @@ const paymentValidations = {
       .withMessage('Payment method is required'),
     
     body('amount')
-      .isFloat({ min: 0.01 })
-      .withMessage('Amount must be a positive number'),
-    
+      .isFloat()
+      .withMessage('Amount must be a valid number'),
+
     body('currency')
       .isIn(['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'CNY'])
       .withMessage('Please provide a valid currency code'),
