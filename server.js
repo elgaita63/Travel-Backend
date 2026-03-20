@@ -79,7 +79,8 @@ app.get('/api/system/version', (req, res) => {
 app.use('/uploads', express.static('uploads'));
 app.use('/api', require('./routes'));
 
-const mongoUrl = process.env.MONGODB_URL || config.MONGODB_URL;
+const mongoUrl = process.env.MONGODB_URL || process.env.MONGODB_URI || config.MONGODB_URL;
+
 mongoose.connect(mongoUrl, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
     console.log('✅ MongoDB Connected');
