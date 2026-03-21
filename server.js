@@ -44,7 +44,7 @@ const PORT = process.env.PORT || 5000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// CORS
+// --- BLOQUE DE CORS ACTUALIZADO ---
 const allowedOrigins = [
   'https://travel-management-system1.netlify.app',
   'https://traveltesting001.netlify.app',
@@ -61,7 +61,9 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // --- ENDPOINT PARA STATUS BAR (SISTEMA) ---
