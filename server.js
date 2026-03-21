@@ -79,7 +79,25 @@ app.get('/api/system/version', (req, res) => {
 app.use('/uploads', express.static('uploads'));
 app.use('/api', require('./routes'));
 
-const mongoUrl = process.env.MONGODB_URL || process.env.MONGODB_URI || config.MONGODB_URL;
+
+// --- DIAGNÓSTICO DE CONEXIÓN ---
+const mongoUrl = process.env.MONGODB_URL || config.MONGODB_URL;
+
+if (mongoUrl) {
+  const maskedUrl = mongoUrl.replace(/:([^:]+)@/, ':****@'); 
+  console.log('-----------------------------------');
+  console.log('🔍 URL detectada:', maskedUrl);
+  console.log('🔍 Longitud de la URL:', mongoUrl.length);
+  console.log('🔍 ¿Tiene el punto en el pass?:', mongoUrl.includes(':.'));
+  console.log('🔍 Base de datos destino:', mongoUrl.split('/').pop().split('?')[0]);
+  console.log('-----------------------------------');
+} else {
+  console.log('❌ ERROR: No se detectó ninguna URL en MONGODB_URL ni en config');
+}
+
+
+
+
 
 mongoose.connect(mongoUrl, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
