@@ -44,7 +44,7 @@ const PORT = process.env.PORT || 5000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// --- BLOQUE DE CORS ACTUALIZADO ---
+// --- BLOQUE DE CORS REFORZADO ---
 const allowedOrigins = [
   'https://travel-management-system1.netlify.app',
   'https://traveltesting001.netlify.app',
@@ -55,6 +55,7 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
+    // Permitimos si no hay origen (herramientas locales) o si está en la lista
     if (!origin || allowedOrigins.includes(origin) || origin.includes('netlify.app')) {
       callback(null, true);
     } else {
@@ -63,8 +64,11 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }));
+
+// Manejo explícito de peticiones OPTIONS
+app.options('*', cors());
 
 // --- ENDPOINT PARA STATUS BAR (SISTEMA) ---
 app.get('/api/system/version', (req, res) => {
