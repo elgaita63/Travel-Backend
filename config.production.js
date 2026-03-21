@@ -1,9 +1,9 @@
 // Production configuration for backend
 module.exports = {
-  // Database Configuration
-  MONGODB_URL: 'mongodb+srv://Travel-AI:5YFFDVAOeHQgNhOb@cluster0.3ux4pfk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
-  MONGODB_URI: 'mongodb+srv://Travel-AI:5YFFDVAOeHQgNhOb@cluster0.3ux4pfk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
-  
+// Database Configuration - AHORA APUNTANDO A TEST
+  MONGODB_URL: 'mongodb+srv://Evaudo:.LH3q2TxPb8yywD@cluster0.so163ar.mongodb.net/marenostrum_test?retryWrites=true&w=majority',
+  MONGODB_URI: 'mongodb+srv://Evaudo:.LH3q2TxPb8yywD@cluster0.so163ar.mongodb.net/marenostrum_test?retryWrites=true&w=majority',
+
   // Server Configuration
   PORT: process.env.PORT || 5000,
   NODE_ENV: 'production',
