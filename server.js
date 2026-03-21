@@ -47,6 +47,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // CORS
 const allowedOrigins = [
   'https://travel-management-system1.netlify.app',
+  'https://traveltesting001.netlify.app',
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:5000'
