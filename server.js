@@ -44,7 +44,7 @@ const PORT = process.env.PORT || 5000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// --- BLOQUE DE CORS REFORZADO ---
+// CORS
 const allowedOrigins = [
   'https://travel-management-system1.netlify.app',
   'https://traveltesting001.netlify.app',
@@ -55,7 +55,6 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Permitimos si no hay origen (herramientas locales) o si está en la lista
     if (!origin || allowedOrigins.includes(origin) || origin.includes('netlify.app')) {
       callback(null, true);
     } else {
@@ -67,25 +66,30 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }));
 
-// Manejo explícito de peticiones OPTIONS
 app.options('*', cors());
 
-// --- ENDPOINT PARA STATUS BAR (SISTEMA) ---
+// --- ENDPOINT PARA STATUS BAR (SISTEMA) CORREGIDO ---
 app.get('/api/system/version', (req, res) => {
+  const env = process.env.NODE_ENV;
+  let dbName = 'NO_DATABASE';
+  
+  if (mongoose.connection && mongoose.connection.db) {
+    dbName = mongoose.connection.db.databaseName;
+  }
+
   res.json({ 
     success: true,
     version: getGitTagVersion(),
-    environment: process.env.NODE_ENV || 'development',
+    environment: env ? env.toUpperCase() : 'UNKNOWN', 
     database: {
-      host: mongoose.connection.host || 'localhost',
-      name: mongoose.connection.name || 'marenostrum_db'
+      host: mongoose.connection.host || 'UNKNOWN_HOST', 
+      name: dbName
     }
   });
 });
 
 app.use('/uploads', express.static('uploads'));
 app.use('/api', require('./routes'));
-
 
 // --- DIAGNÓSTICO DE CONEXIÓN ---
 const mongoUrl = process.env.MONGODB_URL || config.MONGODB_URL;
@@ -101,10 +105,6 @@ if (mongoUrl) {
 } else {
   console.log('❌ ERROR: No se detectó ninguna URL en MONGODB_URL ni en config');
 }
-
-
-
-
 
 mongoose.connect(mongoUrl, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
