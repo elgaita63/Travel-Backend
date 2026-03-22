@@ -11,8 +11,8 @@ module.exports = {
   // Frontend URL (for CORS)
   FRONTEND_URL: 'http://localhost:5173',
 
-  OPENAI_API_KEY: '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',
-  
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'tu_clave_aqui_no_va',
+
   // JWT Configuration
   JWT_SECRET: 'your_local_jwt_secret_key_here',
   
