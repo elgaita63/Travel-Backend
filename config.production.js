@@ -1,18 +1,18 @@
 // Production configuration for backend
 module.exports = {
-// Database Configuration - AHORA APUNTANDO A TEST
-  MONGODB_URL: 'mongodb+srv://Evaudo:.LH3q2TxPb8yywD@cluster0.so163ar.mongodb.net/marenostrum_test?retryWrites=true&w=majority',
-  MONGODB_URI: 'mongodb+srv://Evaudo:.LH3q2TxPb8yywD@cluster0.so163ar.mongodb.net/marenostrum_test?retryWrites=true&w=majority',
+  MONGODB_URL: process.env.MONGODB_URL || '',
+  MONGODB_URI: process.env.MONGODB_URI || '',
 
   // Server Configuration
-  PORT: process.env.PORT || 5000,
-  NODE_ENV: 'production',
+  PORT: process.env.PORT || 8080,
   
   // Frontend URL (for CORS)
-  FRONTEND_URL: 'https://travel-management-system1.netlify.app',
+  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   
   // JWT Configuration
   JWT_SECRET: process.env.JWT_SECRET || 'your_production_jwt_secret_key_here',
+
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || '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',
   
   // File Upload Configuration
   STORAGE_PROVIDER: 'local',

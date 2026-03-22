@@ -12,7 +12,7 @@ require('./models/CurrencyUnit');
 require('./models/PaymentMethod');
 
 // Environment Config
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV === 'development') {
   require('dotenv').config({ path: './env.local' });
 } else {
   try {
@@ -22,7 +22,7 @@ if (process.env.NODE_ENV !== 'production') {
   }
 }
 
-const config = process.env.NODE_ENV === 'production' 
+const config = process.env.NODE_ENV != 'development' 
   ? require('./config.production') 
   : require('./config.local');
 
@@ -46,11 +46,8 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // CORS
 const allowedOrigins = [
-  'https://travel-management-system1.netlify.app',
-  'https://traveltesting001.netlify.app',
-  'http://localhost:3000',
+   process.env.FRONTEND_URL, 
   'http://localhost:5173',
-  'http://localhost:5000'
 ];
 
 app.use(cors({
@@ -98,8 +95,6 @@ if (mongoUrl) {
   const maskedUrl = mongoUrl.replace(/:([^:]+)@/, ':****@'); 
   console.log('-----------------------------------');
   console.log('🔍 URL detectada:', maskedUrl);
-  console.log('🔍 Longitud de la URL:', mongoUrl.length);
-  console.log('🔍 ¿Tiene el punto en el pass?:', mongoUrl.includes(':.'));
   console.log('🔍 Base de datos destino:', mongoUrl.split('/').pop().split('?')[0]);
   console.log('-----------------------------------');
 } else {
