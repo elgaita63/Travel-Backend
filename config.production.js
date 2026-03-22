@@ -12,7 +12,7 @@ module.exports = {
   // JWT Configuration
   JWT_SECRET: process.env.JWT_SECRET || 'your_production_jwt_secret_key_here',
 
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',  
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   // File Upload Configuration
   STORAGE_PROVIDER: 'local',
   UPLOAD_PATH: './uploads',
