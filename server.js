@@ -89,7 +89,6 @@ app.get('/api/system/version', (req, res) => {
 app.use('/uploads', express.static('uploads'));
 app.use('/api', require('./routes'));
 
-// --- DIAGNÓSTICO DE CONEXIÓN ---
 const mongoUrl = process.env.MONGODB_URL || config.MONGODB_URL;
 
 // ====================
@@ -97,15 +96,11 @@ const mongoUrl = process.env.MONGODB_URL || config.MONGODB_URL;
 // ====================
 console.log("🚀 --- LOG DE ENTORNO --- 🚀");
 
-// Buscamos la variable de Mongo, sea cual sea el nombre que tenga (MONGODB_URI, MONGO_URL, etc.)
-const mongoKey = Object.keys(process.env).find(key => key.includes('MONGO'));
-const mongoValue = process.env[mongoKey];
 
 const variablesBack = {
     "NODE_ENV": process.env.NODE_ENV || "No definido",
     "PORT_RAILWAY": process.env.PORT || "5000",
-    "MONGO_VAR_NAME": mongoKey || "❌ NO ENCONTRADA",
-    "MONGO_VALUE": mongoValue ? `${mongoValue.substring(0, 30)}...` : "❌ VACÍA",
+    "MONGO_DB": mongoUrl || "❌ VACÍA",
     "JWT_STATUS": process.env.JWT_SECRET ? "✅ DEFINIDA" : "❌ VACÍA",
     "FRONT_URL": process.env.FRONTEND_URL || "❌ NO CONFIGURADA",
     "OPENAI_KEY": process.env.OPENAI_API_KEY ? 
