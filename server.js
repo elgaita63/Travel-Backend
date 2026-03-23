@@ -50,18 +50,6 @@ const allowedOrigins = [
   'http://localhost:5173',
 ];
 
-const configBack = {
-    PORT_ASIGNADO: process.env.PORT || 'Usando 5000 (Local)',
-    NODE_ENV: process.env.NODE_ENV,
-    // Verificamos si la URL de Mongo tiene el formato correcto sin mostrar la pass entera
-    MONGODB: process.env.MONGODB_URL ,
-    // Esta es clave para los errores de CORS
-    URL_FRONT_PERMITIDA: process.env.FRONTEND_URL || "❌ ERROR: NO HAY URL DE FRONT CONFIGURADA",
-    JWT: process.env.JWT_SECRET ? "✅ SECRET CARGADA" : "❌ FALTA JWT_SECRET"
-};
-
-console.table(configBack);
-
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -104,15 +92,32 @@ app.use('/api', require('./routes'));
 // --- DIAGNÓSTICO DE CONEXIÓN ---
 const mongoUrl = process.env.MONGODB_URL || config.MONGODB_URL;
 
-if (mongoUrl) {
-  const maskedUrl = mongoUrl.replace(/:([^:]+)@/, ':****@'); 
-  console.log('-----------------------------------');
-  console.log('🔍 URL detectada:', maskedUrl);
-  console.log('🔍 Base de datos destino:', mongoUrl.split('/').pop().split('?')[0]);
-  console.log('-----------------------------------');
-} else {
-  console.log('❌ ERROR: No se detectó ninguna URL en MONGODB_URL ni en config');
-}
+// ====================
+// AUDITORÍA DE BACKEND
+// ====================
+console.log("🚀 --- LOG DE ENTORNO --- 🚀");
+
+// Buscamos la variable de Mongo, sea cual sea el nombre que tenga (MONGODB_URI, MONGO_URL, etc.)
+const mongoKey = Object.keys(process.env).find(key => key.includes('MONGO'));
+const mongoValue = process.env[mongoKey];
+
+const variablesBack = {
+    "NODE_ENV": process.env.NODE_ENV || "No definido",
+    "PORT_RAILWAY": process.env.PORT || "5000",
+    "MONGO_VAR_NAME": mongoKey || "❌ NO ENCONTRADA",
+    "MONGO_VALUE": mongoValue ? `${mongoValue.substring(0, 30)}...` : "❌ VACÍA",
+    "JWT_STATUS": process.env.JWT_SECRET ? "✅ DEFINIDA" : "❌ VACÍA",
+    "FRONT_URL": process.env.FRONTEND_URL || "❌ NO CONFIGURADA",
+    "OPENAI_KEY": process.env.OPENAI_API_KEY ? 
+        `Presente (Inicia: ${process.env.OPENAI_API_KEY.substring(0, 7)}...)` : "❌ NO DETECTADA"
+};
+
+console.table(variablesBack);
+console.log("🚀 --- FIN DE LOGS ENTORNO --- 🚀");
+// ==========================================
+
+
+
 
 mongoose.connect(mongoUrl, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
