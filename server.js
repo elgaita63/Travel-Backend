@@ -50,6 +50,19 @@ const allowedOrigins = [
   'http://localhost:5173',
 ];
 
+const configBack = {
+    PORT_ASIGNADO: process.env.PORT || 'Usando 5000 (Local)',
+    NODE_ENV: process.env.NODE_ENV,
+    // Verificamos si la URL de Mongo tiene el formato correcto sin mostrar la pass entera
+    MONGODB: process.env.MONGODB_URL ,
+    // Esta es clave para los errores de CORS
+    URL_FRONT_PERMITIDA: process.env.FRONTEND_URL || "❌ ERROR: NO HAY URL DE FRONT CONFIGURADA",
+    JWT: process.env.JWT_SECRET ? "✅ SECRET CARGADA" : "❌ FALTA JWT_SECRET"
+};
+
+console.table(configBack);
+
+
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin) || origin.includes('netlify.app')) {
