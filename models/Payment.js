@@ -118,6 +118,13 @@ const paymentSchema = new mongoose.Schema({
     trim: true,
     maxlength: [500, 'Notes cannot exceed 500 characters']
   },
+  // --- NUEVO CAMPO AGREGADO ---
+  paymentTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Provider',
+    default: null
+  },
+  // ---------------------------
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -136,6 +143,9 @@ paymentSchema.index({ currency: 1 });
 paymentSchema.index({ status: 1 });
 paymentSchema.index({ method: 1 });
 paymentSchema.index({ transactionId: 1 });
+// --- NUEVO ÍNDICE AGREGADO ---
+paymentSchema.index({ paymentTo: 1 });
+// -----------------------------
 
 // Pre-save middleware to calculate total fees
 paymentSchema.pre('save', function(next) {

@@ -50,9 +50,6 @@ const recordClientPayment = async (req, res) => {
       });
     }
 
-    // Store payment method exactly as entered by the user to preserve capitalization
-    // No normalization needed - we want to preserve the original formatting
-
     // Validate sale exists
     const sale = await Sale.findById(paymentData.saleId);
     if (!sale) {
@@ -86,11 +83,9 @@ const recordClientPayment = async (req, res) => {
       
       // Convert amount based on sale currency
       if (sale.saleCurrency === 'USD') {
-        // Converting to USD: divide by exchange rate (e.g., 1600 ARS / 4 = 400 USD)
         convertedAmount = originalAmount / exchangeRate;
         convertedCurrency = 'USD';
       } else if (sale.saleCurrency === 'ARS') {
-        // Converting to ARS: multiply by exchange rate (e.g., 1600 USD * 4 = 6400 ARS)
         convertedAmount = originalAmount * exchangeRate;
         convertedCurrency = 'ARS';
       }
@@ -99,11 +94,12 @@ const recordClientPayment = async (req, res) => {
     // Create payment with converted values as primary
     const payment = new Payment({
       ...paymentData,
-      amount: convertedAmount, // Store converted amount in sale currency
-      currency: convertedCurrency, // Store converted currency
-      originalAmount, // Store original amount for reference
-      originalCurrency, // Store original currency for reference
+      amount: convertedAmount,
+      currency: convertedCurrency,
+      originalAmount,
+      originalCurrency,
       type: 'client',
+      paymentTo: paymentData.paymentTo || null, // Habilitado para destinatario (Agencia o Proveedor)
       createdBy: userId,
       exchangeRate,
       baseCurrency,
@@ -131,10 +127,9 @@ const recordClientPayment = async (req, res) => {
     // Populate payment for response
     await payment.populate([
       { path: 'saleId', select: 'id totalSalePrice totalCost' },
+      { path: 'paymentTo', select: 'name' },
       { path: 'createdBy', select: 'username email' }
     ]);
-
-    // Report cache clearing removed - no caching mechanism in place
 
     res.status(201).json({
       success: true,
@@ -178,9 +173,6 @@ const recordProviderPayment = async (req, res) => {
       });
     }
 
-    // Store payment method exactly as entered by the user to preserve capitalization
-    // No normalization needed - we want to preserve the original formatting
-
     // Validate sale exists
     const sale = await Sale.findById(paymentData.saleId);
     if (!sale) {
@@ -214,11 +206,9 @@ const recordProviderPayment = async (req, res) => {
       
       // Convert amount based on sale currency
       if (sale.saleCurrency === 'USD') {
-        // Converting to USD: divide by exchange rate (e.g., 1600 ARS / 4 = 400 USD)
         convertedAmount = originalAmount / exchangeRate;
         convertedCurrency = 'USD';
       } else if (sale.saleCurrency === 'ARS') {
-        // Converting to ARS: multiply by exchange rate (e.g., 1600 USD * 4 = 6400 ARS)
         convertedAmount = originalAmount * exchangeRate;
         convertedCurrency = 'ARS';
       }
@@ -227,11 +217,12 @@ const recordProviderPayment = async (req, res) => {
     // Create payment with converted values as primary
     const payment = new Payment({
       ...paymentData,
-      amount: convertedAmount, // Store converted amount in sale currency
-      currency: convertedCurrency, // Store converted currency
-      originalAmount, // Store original amount for reference
-      originalCurrency, // Store original currency for reference
+      amount: convertedAmount,
+      currency: convertedCurrency,
+      originalAmount,
+      originalCurrency,
       type: 'provider',
+      paymentTo: paymentData.paymentTo || null, // Destinatario del pago de la agencia
       createdBy: userId,
       exchangeRate,
       baseCurrency,
@@ -262,10 +253,9 @@ const recordProviderPayment = async (req, res) => {
     // Populate payment for response
     await payment.populate([
       { path: 'saleId', select: 'id totalSalePrice totalCost' },
+      { path: 'paymentTo', select: 'name' },
       { path: 'createdBy', select: 'username email' }
     ]);
-
-    // Report cache clearing removed - no caching mechanism in place
 
     res.status(201).json({
       success: true,
@@ -328,6 +318,7 @@ const getPayments = async (req, res) => {
     const payments = await Payment.find(query)
       .populate([
         { path: 'saleId', select: 'id totalSalePrice totalCost' },
+        { path: 'paymentTo', select: 'name' },
         { path: 'createdBy', select: 'username email' }
       ])
       .sort({ date: -1 })
@@ -363,6 +354,7 @@ const getPayment = async (req, res) => {
     const payment = await Payment.findById(id)
       .populate([
         { path: 'saleId', select: 'id totalSalePrice totalCost clientId' },
+        { path: 'paymentTo', select: 'name' },
         { path: 'createdBy', select: 'username email' }
       ]);
     
@@ -393,7 +385,6 @@ const updatePayment = async (req, res) => {
     const { id } = req.params;
     let updateData = req.body;
 
-    // Handle file upload if receipt was uploaded
     if (req.file) {
       updateData.receiptImage = `/uploads/payments/${req.file.filename}`;
     }
@@ -404,6 +395,7 @@ const updatePayment = async (req, res) => {
       { new: true, runValidators: true }
     ).populate([
       { path: 'saleId', select: 'id totalSalePrice totalCost' },
+      { path: 'paymentTo', select: 'name' },
       { path: 'createdBy', select: 'username email' }
     ]);
 
@@ -414,11 +406,9 @@ const updatePayment = async (req, res) => {
       });
     }
 
-    // Recalculate sale balances if amount changed
     if (updateData.amount !== undefined) {
       const sale = await Sale.findById(payment.saleId);
       if (sale) {
-        // Recalculate total payments for this type
         const payments = await Payment.find({ 
           saleId: sale.id, 
           type: payment.type 
@@ -432,13 +422,11 @@ const updatePayment = async (req, res) => {
           sale.totalProviderPayments = totalPayments;
         }
         
-        // Recalculate balances
         sale.clientBalance = sale.totalSalePrice - sale.totalClientPayments;
         sale.providerBalance = sale.totalProviderPayments - sale.totalCost;
         
         await sale.save();
         
-        // Check and update sale status based on new balance
         const statusUpdate = await sale.checkAndUpdateStatus();
         if (statusUpdate.statusChanged) {
           console.log(`Sale status automatically updated: ${statusUpdate.previousStatus} → ${statusUpdate.newStatus}`);
@@ -484,7 +472,6 @@ const deletePayment = async (req, res) => {
       });
     }
 
-    // Update sale to remove payment reference and recalculate balances
     const sale = await Sale.findById(payment.saleId);
     if (sale) {
       if (payment.type === 'client') {
@@ -495,7 +482,6 @@ const deletePayment = async (req, res) => {
         sale.totalProviderPayments -= payment.amount;
       }
       
-      // Recalculate balances
       sale.clientBalance = sale.totalSalePrice - sale.totalClientPayments;
       sale.providerBalance = sale.totalProviderPayments - sale.totalCost;
       
@@ -517,7 +503,6 @@ const deletePayment = async (req, res) => {
     });
   }
 };
-
 
 // GET /api/currencies - Get supported currencies
 const getSupportedCurrencies = async (req, res) => {
@@ -541,30 +526,24 @@ const getSupportedCurrencies = async (req, res) => {
 // Helper function to create vendor payment tracking records
 const createVendorPaymentRecords = async (sale, payment, userId) => {
   try {
-    // Get the sale with populated services and providers
     const populatedSale = await Sale.findById(sale._id).populate([
       { path: 'services.serviceId', select: 'destino type' },
       { path: 'services.providerId', select: 'name commissionRate paymentTerms' }
     ]);
 
-
-    // Create vendor payment records for each provider in the sale
     const vendorPaymentPromises = populatedSale.services.map(async (serviceSale) => {
       const provider = serviceSale.providerId;
       
-      // Skip if provider is null or undefined
       if (!provider) {
         return null;
       }
       
-      // Calculate profit (commission disabled)
       const grossRevenue = serviceSale.priceClient * serviceSale.quantity;
       const providerCost = serviceSale.costProvider * serviceSale.quantity;
-      const commissionRate = 0; // Commission disabled
-      const commissionAmount = 0; // Commission disabled
-      const netProfit = grossRevenue - providerCost; // No commission deduction
+      const commissionRate = 0; 
+      const commissionAmount = 0; 
+      const netProfit = grossRevenue - providerCost; 
 
-      // Check if vendor payment record already exists
       const existingVendorPayment = await VendorPayment.findOne({
         saleId: sale._id,
         providerId: provider._id,
@@ -572,7 +551,6 @@ const createVendorPaymentRecords = async (sale, payment, userId) => {
       });
 
       if (!existingVendorPayment) {
-        // Create vendor payment record
         const vendorPaymentData = {
           saleId: sale._id,
           providerId: provider._id,
@@ -617,12 +595,10 @@ const createVendorPaymentRecords = async (sale, payment, userId) => {
       }
     });
 
-    // Filter out null values and execute promises
     const validPromises = vendorPaymentPromises.filter(promise => promise !== null);
     await Promise.all(validPromises);
   } catch (error) {
     console.error('Error creating vendor payment records:', error);
-    // Don't throw error here as it shouldn't break the main payment flow
   }
 };
 
