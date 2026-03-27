@@ -11,6 +11,11 @@ const { ensureAllUploadDirectories } = require('./scripts/ensureUploadDirs');
 require('./models/CurrencyUnit');
 require('./models/PaymentMethod');
 
+// ============================
+// VERSION DE BACK - ACTUALIZAR
+// ============================
+  const BackendVersion = '2.1.0UDV';
+
 // Environment Config
 if (process.env.NODE_ENV === 'development') {
   require('dotenv').config({ path: './env.local' });
@@ -30,13 +35,6 @@ Object.keys(config).forEach(key => {
   if (!process.env[key]) process.env[key] = config[key];
 });
 
-const getGitTagVersion = () => {
-  try {
-    return execSync('git describe --tags --abbrev=0').toString().trim();
-  } catch (error) {
-    return 'v0.0.0-NonVersioned'; 
-  }
-};
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -77,7 +75,7 @@ app.get('/api/system/version', (req, res) => {
 
   res.json({ 
     success: true,
-    version: getGitTagVersion(),
+    version: BackendVersion,
     environment: env ? env.toUpperCase() : 'UNKNOWN', 
     database: {
       host: mongoose.connection.host || 'UNKNOWN_HOST', 
