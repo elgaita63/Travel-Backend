@@ -39,7 +39,7 @@ const createClient = async (req, res) => {
       }
     }
 
-    // --- CAMBIO: Permitir que la URL del OCR se guarde ---
+    // Guardamos el cliente (incluyendo la URL de passportImage si viene del OCR)
     const client = new Client(clientData);
     await client.save();
 
@@ -112,7 +112,7 @@ const getAllClientsWithSales = async (req, res) => {
   }
 };
 
-// PUT /api/clients/:clientId - Update client (CON LÓGICA DE SUPABASE)
+// PUT /api/clients/:clientId - Update client
 const updateClient = async (req, res) => {
   try {
     const { clientId } = req.params;
@@ -172,12 +172,13 @@ const extractPassportData = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No passport image uploaded' });
     
-    console.log('🤖 Iniciando proceso OCR y subida a la nube...');
+    console.log('🤖 Titular: Iniciando proceso OCR y subida a la nube...');
 
+    // 1. Extraemos los datos con OpenAI usando el BUFFER
     const openaiResult = await openaiVisionService.extractDocumentData(req.file.buffer);
     if (!openaiResult.success) return res.status(500).json({ success: false, message: 'OCR failed', error: openaiResult.error });
 
-    // --- CAMBIO: Subir a Supabase durante el OCR ---
+    // 2. Subimos a Supabase durante el OCR para tener la URL
     let passportUrl = null;
     try {
       const fileExt = req.file.originalname.split('.').pop() || 'jpg';
@@ -213,18 +214,22 @@ const extractPassportData = async (req, res) => {
   }
 };
 
-// GET /api/clients/:clientId/passport-image - Soporte para URL o Disco
+// GET /api/clients/:clientId/passport-image - Soporte para URL o Disco (CORREGIDO)
 const getPassportImage = async (req, res) => {
   try {
     const { clientId } = req.params;
     const client = await Client.findById(clientId);
     if (!client || !client.passportImage) return res.status(404).json({ success: false, message: 'No image found' });
 
-    if (client.passportImage.startsWith('http')) {
-      return res.redirect(client.passportImage);
+    // --- CIRUGÍA: Blindamos la detección de la URL de Supabase ---
+    const cleanPath = client.passportImage.trim();
+    if (/^https?:\/\//i.test(cleanPath)) {
+      console.log('🔗 Redirigiendo a URL externa de Supabase:', cleanPath);
+      return res.redirect(cleanPath);
     }
 
-    const imagePath = path.join(__dirname, '../uploads/passports', client.passportImage);
+    // Si es un nombre de archivo (viejos), servimos del disco
+    const imagePath = path.join(__dirname, '../uploads/passports', cleanPath);
     res.sendFile(imagePath);
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching image' });
@@ -241,7 +246,6 @@ const createClientWithCompanions = async (req, res) => {
     const existingClient = await Client.findOne({ dni: mainClient.dni });
     if (existingClient) return res.status(409).json({ success: false, message: 'Passenger with this DNI already exists' });
 
-    // --- CAMBIO: mainClient ya puede traer la URL de passportImage ---
     const mainClientData = { ...mainClient, createdBy: req.user.id, isMainClient: true };
     const createdMainClient = new Client(mainClientData);
     await createdMainClient.save();

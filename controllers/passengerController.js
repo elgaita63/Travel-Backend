@@ -134,21 +134,40 @@ const getClientPassengers = async (req, res) => {
   }
 };
 
-// POST /api/passengers/ocr - OpenAI Vision con Buffer
+// POST /api/passengers/ocr - OpenAI Vision con Buffer + Subida a Supabase
 const extractPassengerPassportData = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No image uploaded' });
 
-    // Enviamos el buffer directamente
-    const openaiResult = await openaiVisionService.extractDocumentData(req.file.buffer);
+    console.log('🤖 Acompañante: Iniciando OCR y subida a la nube...');
 
+    // 1. Extraemos datos con el buffer
+    const openaiResult = await openaiVisionService.extractDocumentData(req.file.buffer);
     if (!openaiResult.success) return res.status(500).json({ success: false, message: 'OCR failed', error: openaiResult.error });
+
+    // 2. Subida inmediata a Supabase para que el Front ya tenga la URL
+    let passportUrl = null;
+    try {
+      const fileName = `pass-ocr-${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('pports')
+        .upload(fileName, req.file.buffer, { contentType: req.file.mimetype });
+
+      if (!uploadError) {
+        const { data } = supabase.storage.from('pports').getPublicUrl(fileName);
+        passportUrl = data.publicUrl;
+        console.log('✅ Imagen de acompañante disponible en Supabase:', passportUrl);
+      }
+    } catch (supaErr) {
+      console.error('⚠️ Error subiendo imagen de acompañante:', supaErr.message);
+    }
 
     res.json({
       success: true,
       data: {
         extractedData: openaiResult.data,
         confidence: openaiResult.confidence,
+        passportImage: passportUrl, // URL real de Supabase
         method: 'openai_vision_api'
       }
     });
@@ -158,7 +177,7 @@ const extractPassengerPassportData = async (req, res) => {
   }
 };
 
-// GET /api/passengers/:passengerId/passport-image - Redirección o Disco
+// GET /api/passengers/:passengerId/passport-image - Redirección o Disco (CORREGIDO)
 const getPassengerPassportImage = async (req, res) => {
   try {
     const { passengerId } = req.params;
@@ -166,13 +185,15 @@ const getPassengerPassportImage = async (req, res) => {
     
     if (!passenger || !passenger.passportImage) return res.status(404).json({ success: false, message: 'No image found' });
 
-    // Si es URL de Supabase, redirigimos
-    if (passenger.passportImage.startsWith('http')) {
-      return res.redirect(passenger.passportImage);
+    // --- CIRUGÍA: Blindamos la detección de la URL de Supabase para evitar el Frankenstein ---
+    const cleanPath = passenger.passportImage.trim();
+    if (/^https?:\/\//i.test(cleanPath)) {
+      console.log('🔗 Redirigiendo a URL externa de Supabase (Acompañante):', cleanPath);
+      return res.redirect(cleanPath);
     }
 
     // Si es vieja (disco), servimos el archivo
-    const imagePath = path.join(__dirname, '../uploads/passports', passenger.passportImage);
+    const imagePath = path.join(__dirname, '../uploads/passports', cleanPath);
     res.sendFile(imagePath);
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching image' });
