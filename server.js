@@ -14,7 +14,7 @@ require('./models/PaymentMethod');
 // ============================
 // VERSION DE BACK - ACTUALIZAR
 // ============================
-  const BackendVersion = '2.1.0UDV';
+  const BackendVersion = '3.0.0NVT'; //NonVolatileTranslation
 
 // Environment Config
 if (process.env.NODE_ENV === 'development') {

@@ -58,7 +58,8 @@ router.post('/ocr', uploadPassportImage, handleUploadError, activityLoggers.pass
 router.get('/:clientId/passport-image', getPassportImage);
 
 // Passenger routes for specific client
-router.post('/:clientId/passengers', passengerValidations.create, activityLoggers.passengerCreate, addPassenger);
+// CAMBIO: Se agregó uploadPassportImage y handleUploadError para atajar fotos de acompañantes
+router.post('/:clientId/passengers', uploadPassportImage, handleUploadError, passengerValidations.create, activityLoggers.passengerCreate, addPassenger);
 router.get('/:clientId/passengers', getClientPassengers);
 
 // Companion routes for specific client
