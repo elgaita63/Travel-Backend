@@ -29,7 +29,8 @@ router.use(authenticate);
 router.use(requireAdminOrSeller);
 
 // Client CRUD routes
-router.post('/', activityLoggers.clientCreate, createClient);
+// CAMBIO CLAVE: Agregamos uploadPassportImage para que Express pueda leer la imagen y el req.body
+router.post('/', uploadPassportImage, handleUploadError, activityLoggers.clientCreate, createClient);
 router.post('/bulk', activityLoggers.clientCreate, createClientWithCompanions);
 router.get('/', getAllClients);
 router.get('/all-passengers', getAllPassengers);

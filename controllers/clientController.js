@@ -8,7 +8,7 @@ const supabase = require('../config/supabaseClient');
 // POST /api/clients - Create a new client
 const createClient = async (req, res) => {
   try {
-    const clientData = req.body;
+    const clientData = { ...req.body };
     clientData.createdBy = req.user.id;
     
     const requiredFields = ['name', 'surname', 'dni'];
@@ -37,6 +37,37 @@ const createClient = async (req, res) => {
           message: 'Passenger with this email already exists'
         });
       }
+    }
+
+    // PROCESO DE IMAGEN SEGURO
+    if (req.file) {
+      console.log('📸 Recibido archivo físico para subir:', req.file.originalname);
+      const fileExt = req.file.originalname.split('.').pop();
+      const fileName = `passport-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('pports')
+        .upload(fileName, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: true
+        });
+
+      if (uploadError) {
+        console.error('❌ Error subiendo a Supabase:', uploadError.message);
+        return res.status(500).json({ success: false, message: 'Error uploading image to storage' });
+      }
+
+      clientData.passportImage = fileName;
+      console.log('✅ Imagen guardada exitosamente:', fileName);
+      
+    } else {
+      console.log('ℹ️ No se recibió archivo físico (passportImage quedará vacío).');
+      clientData.passportImage = '';
+    }
+
+    if (clientData['preferences[specialRequests]']) {
+      clientData.preferences = { specialRequests: clientData['preferences[specialRequests]'] };
+      delete clientData['preferences[specialRequests]'];
     }
 
     const client = new Client(clientData);
@@ -134,7 +165,6 @@ const updateClient = async (req, res) => {
       }
 
       updateData.passportImage = fileName;
-      console.log('✅ Imagen guardada en bucket privado:', fileName);
     }
 
     const client = await Client.findByIdAndUpdate(clientId, updateData, { new: true, runValidators: true });
@@ -161,37 +191,22 @@ const deleteClient = async (req, res) => {
   }
 };
 
-// POST /api/clients/ocr - OCR con Buffer y subida inmediata a Supabase
+// POST /api/clients/ocr - OCR VOLÁTIL
 const extractPassportData = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No passport image uploaded' });
     
-    console.log('🤖 Titular: Iniciando proceso OCR y subida a la nube...');
+    console.log('🤖 OCR Volátil: Extrayendo datos sin guardar en Supabase...');
 
     const openaiResult = await openaiVisionService.extractDocumentData(req.file.buffer);
     if (!openaiResult.success) return res.status(500).json({ success: false, message: 'OCR failed', error: openaiResult.error });
-
-    const fileExt = req.file.originalname.split('.').pop() || 'jpg';
-    const fileName = `ocr-temp-${Date.now()}.${fileExt}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('pports')
-      .upload(fileName, req.file.buffer, {
-        contentType: req.file.mimetype,
-        upsert: true
-      });
-
-    if (uploadError) {
-      console.error('❌ Error subiendo imagen OCR:', uploadError.message);
-      return res.status(500).json({ success: false, message: 'OCR data extracted but image upload failed' });
-    }
 
     res.json({
       success: true,
       data: { 
         extractedData: openaiResult.data, 
         confidence: openaiResult.confidence, 
-        passportImage: fileName,
+        passportImage: null,
         method: 'openai_vision_api' 
       }
     });
@@ -200,7 +215,7 @@ const extractPassportData = async (req, res) => {
   }
 };
 
-// GET /api/clients/:clientId/passport-image - Soporte para Signed URLs
+// GET /api/clients/:clientId/passport-image
 const getPassportImage = async (req, res) => {
   try {
     const { clientId } = req.params;
