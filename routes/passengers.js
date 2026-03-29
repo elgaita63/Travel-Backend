@@ -19,7 +19,17 @@ router.use(requireAdminOrSeller);
 
 // Passenger CRUD routes
 router.get('/:passengerId', passengerValidations.getById, getPassenger);
-router.put('/:passengerId', passengerValidations.update, activityLoggers.passengerUpdate, updatePassenger);
+
+// MODIFICACIÓN: Agregamos el middleware de subida a la edición de pasajeros
+router.put(
+  '/:passengerId', 
+  uploadPassportImage, // Ataja la imagen en memoria
+  handleUploadError,   // Maneja errores de tamaño/tipo
+  passengerValidations.update, 
+  activityLoggers.passengerUpdate, 
+  updatePassenger
+);
+
 router.delete('/:passengerId', activityLoggers.passengerDelete, deletePassenger);
 
 // OCR route for passenger passport data extraction
