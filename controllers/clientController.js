@@ -3,7 +3,7 @@ const Passenger = require('../models/Passenger');
 const Sale = require('../models/Sale');
 const openaiVisionService = require('../services/openaiVisionService');
 const path = require('path');
-const supabase = require('../config/supabaseClient'); // Importamos el cliente con fusible
+const supabase = require('../config/supabaseClient'); 
 
 // POST /api/clients - Create a new client
 const createClient = async (req, res) => {
@@ -39,7 +39,6 @@ const createClient = async (req, res) => {
       }
     }
 
-    // Guardamos el cliente (incluyendo la URL de passportImage si viene del OCR)
     const client = new Client(clientData);
     await client.save();
 
@@ -119,28 +118,23 @@ const updateClient = async (req, res) => {
     let updateData = { ...req.body };
 
     if (req.file) {
-      try {
-        const fileExt = req.file.originalname.split('.').pop();
-        const fileName = `passport-${clientId}-${Date.now()}.${fileExt}`;
+      const fileExt = req.file.originalname.split('.').pop();
+      const fileName = `passport-${clientId}-${Date.now()}.${fileExt}`;
 
-        const { data, error: uploadError } = await supabase.storage
-          .from('pports')
-          .upload(fileName, req.file.buffer, {
-            contentType: req.file.mimetype,
-            upsert: true
-          });
+      const { data, error: uploadError } = await supabase.storage
+        .from('pports')
+        .upload(fileName, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: true
+        });
 
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('pports')
-          .getPublicUrl(fileName);
-
-        updateData.passportImage = publicUrl;
-        console.log('✅ URL de pasaporte actualizada en Supabase:', publicUrl);
-      } catch (supaError) {
-        console.error('⚠️ Error subiendo a Supabase (Plan B activo):', supaError.message);
+      if (uploadError) {
+        console.error('❌ Error subiendo a Supabase:', uploadError.message);
+        return res.status(500).json({ success: false, message: 'Error uploading image to storage' });
       }
+
+      updateData.passportImage = fileName;
+      console.log('✅ Imagen guardada en bucket privado:', fileName);
     }
 
     const client = await Client.findByIdAndUpdate(clientId, updateData, { new: true, runValidators: true });
@@ -174,30 +168,22 @@ const extractPassportData = async (req, res) => {
     
     console.log('🤖 Titular: Iniciando proceso OCR y subida a la nube...');
 
-    // 1. Extraemos los datos con OpenAI usando el BUFFER
     const openaiResult = await openaiVisionService.extractDocumentData(req.file.buffer);
     if (!openaiResult.success) return res.status(500).json({ success: false, message: 'OCR failed', error: openaiResult.error });
 
-    // 2. Subimos a Supabase durante el OCR para tener la URL
-    let passportUrl = null;
-    try {
-      const fileExt = req.file.originalname.split('.').pop() || 'jpg';
-      const fileName = `ocr-temp-${Date.now()}.${fileExt}`;
+    const fileExt = req.file.originalname.split('.').pop() || 'jpg';
+    const fileName = `ocr-temp-${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('pports')
-        .upload(fileName, req.file.buffer, {
-          contentType: req.file.mimetype,
-          upsert: true
-        });
+    const { error: uploadError } = await supabase.storage
+      .from('pports')
+      .upload(fileName, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: true
+      });
 
-      if (!uploadError) {
-        const { data } = supabase.storage.from('pports').getPublicUrl(fileName);
-        passportUrl = data.publicUrl;
-        console.log('✅ Imagen OCR disponible en Supabase:', passportUrl);
-      }
-    } catch (supaErr) {
-      console.error('⚠️ Error subiendo imagen temporal en OCR:', supaErr.message);
+    if (uploadError) {
+      console.error('❌ Error subiendo imagen OCR:', uploadError.message);
+      return res.status(500).json({ success: false, message: 'OCR data extracted but image upload failed' });
     }
 
     res.json({
@@ -205,7 +191,7 @@ const extractPassportData = async (req, res) => {
       data: { 
         extractedData: openaiResult.data, 
         confidence: openaiResult.confidence, 
-        passportImage: passportUrl, // URL real de Supabase
+        passportImage: fileName,
         method: 'openai_vision_api' 
       }
     });
@@ -214,23 +200,29 @@ const extractPassportData = async (req, res) => {
   }
 };
 
-// GET /api/clients/:clientId/passport-image - Soporte para URL o Disco (CORREGIDO)
+// GET /api/clients/:clientId/passport-image - Soporte para Signed URLs
 const getPassportImage = async (req, res) => {
   try {
     const { clientId } = req.params;
     const client = await Client.findById(clientId);
     if (!client || !client.passportImage) return res.status(404).json({ success: false, message: 'No image found' });
 
-    // --- CIRUGÍA: Blindamos la detección de la URL de Supabase ---
     const cleanPath = client.passportImage.trim();
+
     if (/^https?:\/\//i.test(cleanPath)) {
-      console.log('🔗 Redirigiendo a URL externa de Supabase:', cleanPath);
-      return res.redirect(cleanPath);
+      return res.json({ success: true, url: cleanPath });
     }
 
-    // Si es un nombre de archivo (viejos), servimos del disco
-    const imagePath = path.join(__dirname, '../uploads/passports', cleanPath);
-    res.sendFile(imagePath);
+    const { data, error } = await supabase.storage
+      .from('pports')
+      .createSignedUrl(cleanPath, 60);
+
+    if (error) {
+      const imagePath = path.join(__dirname, '../uploads/passports', cleanPath);
+      return res.sendFile(imagePath);
+    }
+
+    res.json({ success: true, url: data.signedUrl });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching image' });
   }
