@@ -30,6 +30,7 @@
   "type": "commonjs",
   "dependencies": {
     "@sendgrid/mail": "^8.1.5",
+    "@supabase/supabase-js": "^2.100.1",
     "aws-sdk": "^2.1692.0",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
