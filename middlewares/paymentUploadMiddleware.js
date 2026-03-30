@@ -1,30 +1,11 @@
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 
-// Ensure uploads directory exists
-const uploadDir = path.join(__dirname, '../uploads/payments');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+// 1. Configuramos el almacenamiento en MEMORIA
+// El archivo no se guarda en disco, queda disponible en req.file.buffer
+const storage = multer.memoryStorage();
 
-// Configure storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    // Generate unique filename with timestamp
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const extension = path.extname(file.originalname);
-    const filename = file.fieldname + '-' + uniqueSuffix + extension;
-    cb(null, filename);
-  }
-});
-
-// File filter function
+// 2. Filtro de archivos para recibos de pago
 const fileFilter = (req, file, cb) => {
-  // Allowed file types for payment receipts
   const allowedTypes = [
     'application/pdf',
     'image/jpeg',
@@ -41,13 +22,13 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configure multer
+// 3. Configuración de Multer
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit for receipts
-    files: 1 // Single file upload for receipts
+    files: 1 // Single file upload
   }
 });
 
@@ -77,7 +58,7 @@ const handleUploadError = (error, req, res, next) => {
     }
   }
   
-  if (error.message.includes('Invalid file type')) {
+  if (error.message && error.message.includes('Invalid file type')) {
     return res.status(400).json({
       success: false,
       message: error.message

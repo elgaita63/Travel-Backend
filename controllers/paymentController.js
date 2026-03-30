@@ -5,6 +5,9 @@ const Provider = require('../models/Provider');
 const VendorPayment = require('../models/VendorPayment');
 const currencyService = require('../services/currencyService');
 
+// Reemplazamos la función auxiliar por la instancia directa de Supabase
+const supabase = require('../config/supabaseClient');
+
 // Helper function to calculate due date based on payment terms
 const calculateDueDate = (paymentDate, paymentTerms) => {
   const date = new Date(paymentDate);
@@ -65,11 +68,9 @@ const recordClientPayment = async (req, res) => {
     let convertedAmount = paymentData.amount;
     let convertedCurrency = paymentData.currency;
     
-    // Store original values for reference
     const originalAmount = paymentData.amount;
     const originalCurrency = paymentData.currency;
     
-    // Check if currency conversion is needed
     if (paymentData.originalCurrency && paymentData.originalCurrency !== sale.saleCurrency) {
       if (!paymentData.exchangeRate) {
         return res.status(400).json({
@@ -81,13 +82,40 @@ const recordClientPayment = async (req, res) => {
       exchangeRate = parseFloat(paymentData.exchangeRate);
       baseCurrency = sale.saleCurrency;
       
-      // Convert amount based on sale currency
       if (sale.saleCurrency === 'USD') {
         convertedAmount = originalAmount / exchangeRate;
         convertedCurrency = 'USD';
       } else if (sale.saleCurrency === 'ARS') {
         convertedAmount = originalAmount * exchangeRate;
         convertedCurrency = 'ARS';
+      }
+    }
+
+    // --- Lógica de Supabase (Memoria) apuntando al bucket 'payments' ---
+    let receiptUrl = null;
+    if (req.file && req.file.buffer) {
+      try {
+        console.log('📸 Subiendo recibo de cliente a Supabase (Bucket: payments)...');
+        const timestamp = Date.now();
+        // Intentar sacar la extensión real si viene en originalname, sino usar mimetype
+        const fileExt = req.file.originalname ? req.file.originalname.split('.').pop() : (req.file.mimetype.split('/')[1] || 'jpg');
+        const fileName = `receipt-client-${timestamp}-${Math.round(Math.random() * 1e9)}.${fileExt}`;
+
+        const { data, error } = await supabase.storage
+          .from('payments')
+          .upload(fileName, req.file.buffer, {
+            contentType: req.file.mimetype,
+            upsert: false
+          });
+
+        if (error) {
+          console.error('❌ Error subiendo a Supabase:', error.message);
+        } else {
+          console.log('✅ Recibo guardado exitosamente en Supabase:', fileName);
+          receiptUrl = fileName; 
+        }
+      } catch (uploadError) {
+        console.error('Error procesando el recibo:', uploadError);
       }
     }
 
@@ -99,11 +127,11 @@ const recordClientPayment = async (req, res) => {
       originalAmount,
       originalCurrency,
       type: 'client',
-      paymentTo: paymentData.paymentTo || null, // Habilitado para destinatario (Agencia o Proveedor)
+      paymentTo: paymentData.paymentTo || null,
       createdBy: userId,
       exchangeRate,
       baseCurrency,
-      receiptImage: req.file ? `/uploads/payments/${req.file.filename}` : null
+      receiptImage: receiptUrl 
     });
 
     await payment.save();
@@ -112,19 +140,16 @@ const recordClientPayment = async (req, res) => {
     sale.paymentsClient.push({ paymentId: payment.id });
     sale.totalClientPayments = Number(sale.totalClientPayments) + Number(convertedAmount);
     
-    // Recalculate balances
     sale.clientBalance = sale.totalSalePrice - sale.totalClientPayments;
     sale.providerBalance = sale.totalProviderPayments - sale.totalCost;
     
     await sale.save();
     
-    // Check and update sale status based on new balance
     const statusUpdate = await sale.checkAndUpdateStatus();
     if (statusUpdate.statusChanged) {
       console.log(`Sale status automatically updated: ${statusUpdate.previousStatus} → ${statusUpdate.newStatus}`);
     }
 
-    // Populate payment for response
     await payment.populate([
       { path: 'saleId', select: 'id totalSalePrice totalCost' },
       { path: 'paymentTo', select: 'name' },
@@ -139,16 +164,6 @@ const recordClientPayment = async (req, res) => {
 
   } catch (error) {
     console.error('Record passenger payment error:', error);
-    
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        message: 'Validation error',
-        errors
-      });
-    }
-
     res.status(500).json({
       success: false,
       message: 'Internal server error while recording passenger payment'
@@ -162,7 +177,6 @@ const recordProviderPayment = async (req, res) => {
     const paymentData = req.body;
     const userId = req.user.id;
     
-    // Validate required fields
     const requiredFields = ['saleId', 'method', 'amount', 'currency'];
     const missingFields = requiredFields.filter(field => !paymentData[field]);
     
@@ -173,7 +187,6 @@ const recordProviderPayment = async (req, res) => {
       });
     }
 
-    // Validate sale exists
     const sale = await Sale.findById(paymentData.saleId);
     if (!sale) {
       return res.status(404).json({
@@ -182,17 +195,14 @@ const recordProviderPayment = async (req, res) => {
       });
     }
 
-    // Handle exchange rate and currency conversion
     let exchangeRate = null;
     let baseCurrency = null;
     let convertedAmount = paymentData.amount;
     let convertedCurrency = paymentData.currency;
     
-    // Store original values for reference
     const originalAmount = paymentData.amount;
     const originalCurrency = paymentData.currency;
     
-    // Check if currency conversion is needed
     if (paymentData.originalCurrency && paymentData.originalCurrency !== sale.saleCurrency) {
       if (!paymentData.exchangeRate) {
         return res.status(400).json({
@@ -204,7 +214,6 @@ const recordProviderPayment = async (req, res) => {
       exchangeRate = parseFloat(paymentData.exchangeRate);
       baseCurrency = sale.saleCurrency;
       
-      // Convert amount based on sale currency
       if (sale.saleCurrency === 'USD') {
         convertedAmount = originalAmount / exchangeRate;
         convertedCurrency = 'USD';
@@ -214,7 +223,33 @@ const recordProviderPayment = async (req, res) => {
       }
     }
 
-    // Create payment with converted values as primary
+    // --- Lógica de Supabase (Memoria) apuntando al bucket 'payments' ---
+    let receiptUrl = null;
+    if (req.file && req.file.buffer) {
+      try {
+        console.log('📸 Subiendo recibo de proveedor a Supabase (Bucket: payments)...');
+        const timestamp = Date.now();
+        const fileExt = req.file.originalname ? req.file.originalname.split('.').pop() : (req.file.mimetype.split('/')[1] || 'jpg');
+        const fileName = `receipt-provider-${timestamp}-${Math.round(Math.random() * 1e9)}.${fileExt}`;
+
+        const { data, error } = await supabase.storage
+          .from('payments')
+          .upload(fileName, req.file.buffer, {
+            contentType: req.file.mimetype,
+            upsert: false
+          });
+
+        if (error) {
+          console.error('❌ Error subiendo a Supabase:', error.message);
+        } else {
+          console.log('✅ Recibo guardado exitosamente en Supabase:', fileName);
+          receiptUrl = fileName; 
+        }
+      } catch (uploadError) {
+        console.error('Error procesando el recibo:', uploadError);
+      }
+    }
+
     const payment = new Payment({
       ...paymentData,
       amount: convertedAmount,
@@ -222,35 +257,30 @@ const recordProviderPayment = async (req, res) => {
       originalAmount,
       originalCurrency,
       type: 'provider',
-      paymentTo: paymentData.paymentTo || null, // Destinatario del pago de la agencia
+      paymentTo: paymentData.paymentTo || null,
       createdBy: userId,
       exchangeRate,
       baseCurrency,
-      receiptImage: req.file ? `/uploads/payments/${req.file.filename}` : null
+      receiptImage: receiptUrl // URL de la imagen en Supabase
     });
 
     await payment.save();
 
-    // Update sale with new payment
     sale.paymentsProvider.push({ paymentId: payment.id });
     sale.totalProviderPayments = Number(sale.totalProviderPayments) + Number(convertedAmount);
     
-    // Recalculate balances
     sale.clientBalance = sale.totalSalePrice - sale.totalClientPayments;
     sale.providerBalance = sale.totalProviderPayments - sale.totalCost;
     
     await sale.save();
     
-    // Check and update sale status based on new balance
     const statusUpdate = await sale.checkAndUpdateStatus();
     if (statusUpdate.statusChanged) {
       console.log(`Sale status automatically updated: ${statusUpdate.previousStatus} → ${statusUpdate.newStatus}`);
     }
 
-    // Create vendor payment tracking records for each provider in the sale
     await createVendorPaymentRecords(sale, payment, userId);
 
-    // Populate payment for response
     await payment.populate([
       { path: 'saleId', select: 'id totalSalePrice totalCost' },
       { path: 'paymentTo', select: 'name' },
@@ -265,16 +295,6 @@ const recordProviderPayment = async (req, res) => {
 
   } catch (error) {
     console.error('Record provider payment error:', error);
-    
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        message: 'Validation error',
-        errors
-      });
-    }
-
     res.status(500).json({
       success: false,
       message: 'Internal server error while recording provider payment'
@@ -385,8 +405,30 @@ const updatePayment = async (req, res) => {
     const { id } = req.params;
     let updateData = req.body;
 
-    if (req.file) {
-      updateData.receiptImage = `/uploads/payments/${req.file.filename}`;
+    // --- Lógica de Supabase (Memoria) apuntando al bucket 'payments' ---
+    if (req.file && req.file.buffer) {
+      try {
+        console.log('📸 Actualizando recibo en Supabase (Bucket: payments)...');
+        const timestamp = Date.now();
+        const fileExt = req.file.originalname ? req.file.originalname.split('.').pop() : (req.file.mimetype.split('/')[1] || 'jpg');
+        const fileName = `receipt-update-${timestamp}-${Math.round(Math.random() * 1e9)}.${fileExt}`;
+
+        const { data, error } = await supabase.storage
+          .from('payments')
+          .upload(fileName, req.file.buffer, {
+            contentType: req.file.mimetype,
+            upsert: false
+          });
+
+        if (error) {
+          console.error('❌ Error subiendo a Supabase:', error.message);
+        } else {
+          console.log('✅ Recibo actualizado exitosamente en Supabase:', fileName);
+          updateData.receiptImage = fileName; 
+        }
+      } catch (uploadError) {
+        console.error('Error actualizando el recibo:', uploadError);
+      }
     }
 
     const payment = await Payment.findByIdAndUpdate(
@@ -442,16 +484,6 @@ const updatePayment = async (req, res) => {
 
   } catch (error) {
     console.error('Update payment error:', error);
-    
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        message: 'Validation error',
-        errors
-      });
-    }
-
     res.status(500).json({
       success: false,
       message: 'Internal server error while updating payment'
@@ -602,6 +634,42 @@ const createVendorPaymentRecords = async (sale, payment, userId) => {
   }
 };
 
+// GET /api/payments/:id/receipt-image
+const getReceiptImage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const payment = await Payment.findById(id);
+    
+    if (!payment || !payment.receiptImage) {
+      return res.status(404).json({ success: false, message: 'No image found' });
+    }
+
+    const cleanPath = payment.receiptImage.trim();
+
+    // Si por algún motivo guardó una URL completa antes
+    if (/^https?:\/\//i.test(cleanPath)) {
+      return res.json({ success: true, url: cleanPath });
+    }
+
+    // Le pedimos a Supabase una URL temporal (válida por 60 segundos)
+    const { data, error } = await supabase.storage
+      .from('payments')
+      .createSignedUrl(cleanPath, 60);
+
+    if (error) {
+      // Fallback por si tenías algún recibo viejo guardado en local
+      const path = require('path');
+      const imagePath = path.join(__dirname, '../uploads/payments', cleanPath);
+      return res.sendFile(imagePath);
+    }
+
+    res.json({ success: true, url: data.signedUrl });
+  } catch (error) {
+    console.error('Error fetching receipt image:', error);
+    res.status(500).json({ success: false, message: 'Error fetching image' });
+  }
+};
+
 module.exports = {
   recordClientPayment,
   recordProviderPayment,
@@ -609,5 +677,6 @@ module.exports = {
   getPayment,
   updatePayment,
   deletePayment,
-  getSupportedCurrencies
+  getSupportedCurrencies,
+  getReceiptImage
 };

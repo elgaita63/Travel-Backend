@@ -8,7 +8,8 @@ const {
   updatePayment,
   deletePayment,
   getExchangeRate,
-  getSupportedCurrencies
+  getSupportedCurrencies,
+  getReceiptImage // <-- Importada la nueva función
 } = require('../controllers/paymentController');
 const { authenticate, requireAdminOrSeller } = require('../middlewares/authMiddleware');
 const { uploadReceipt, handleUploadError } = require('../middlewares/paymentUploadMiddleware');
@@ -28,6 +29,7 @@ router.get('/currencies', getSupportedCurrencies);
 
 // ID-based routes (must come after specific routes)
 router.get('/:id', getPayment);
+router.get('/:id/receipt-image', getReceiptImage); // <-- Nueva ruta habilitada
 router.put('/:id', uploadReceipt, handleUploadError, activityLoggers.paymentUpdate, updatePayment);
 router.delete('/:id', activityLoggers.paymentDelete, deletePayment);
 
